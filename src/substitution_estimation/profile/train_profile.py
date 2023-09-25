@@ -16,7 +16,7 @@ import sys
 
 from dataloading_utils_profile import MyDataset, my_collate
 
-from substitution_estimation.profile.models_profile_utils import AttNet, State, get_params
+from models_profile_utils import AttNet, State, get_params
 
 torch.multiprocessing.set_sharing_strategy('file_system') #to avoid issues in the dataloading
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -131,32 +131,38 @@ if __name__ == "__main__":
     fname = '../data/test_dataset_profile.pth'
     savepath = Path(fname)
     if not savepath.is_file():
+        print("building test dataset")
         test_dataset = MyDataset(r"../data/test_data",cont_size = CONT_SIZE,div=2000)
         with savepath.open("wb") as fp:
             torch.save(test_dataset,fp)
     else:
         with savepath.open("rb") as fp:
+            print("loading test dataset")
             test_dataset = torch.load(fp)
 
     fname = '../data/train_dataset_profile.pth'
     savepath = Path(fname)
     if not savepath.is_file():
+        print("building train dataset")
         train_dataset = MyDataset(r"../data/train_data",cont_size = CONT_SIZE,div=2000)
         with savepath.open("wb") as fp:
             torch.save(test_dataset,fp)
     else:
         with savepath.open("rb") as fp:
-            test_dataset = torch.load(fp)
+            print("loading train dataset")
+            train_dataset = torch.load(fp)
 
     fname = '../data/val_dataset_profile.pth'
     savepath = Path(fname)
     if not savepath.is_file():
+        print("building val dataset")
         val_dataset = MyDataset(r"../data/val_data",cont_size = CONT_SIZE,div=2000)
         with savepath.open("wb") as fp:
             torch.save(test_dataset,fp)
     else:
         with savepath.open("rb") as fp:
-            test_dataset = torch.load(fp)
+            print("loading val dataset")
+            val_dataset = torch.load(fp)
 
     train_dataset.cont_size = CONT_SIZE
     test_dataset.cont_size = CONT_SIZE
@@ -165,6 +171,9 @@ if __name__ == "__main__":
     train_dataset.div = 2000
     test_dataset.div = 2000
     val_dataset.div = 2000
+
+    for dataset in [train_dataset,test_dataset,val_dataset]:
+        dataset.data_dir = "../"+dataset.data_dir
 
     train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True,collate_fn=my_collate,num_workers=4)
     test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True,collate_fn=my_collate,num_workers=4)
@@ -179,5 +188,5 @@ if __name__ == "__main__":
 
     fname = "../models/state_Profile_SemiAxAtt.pth"
 
-
+    print("training")
     _,_,_ = training_loop(train_dataloader, val_dataloader,fname=fname,epochs=4080,state=state,use_mut=False)

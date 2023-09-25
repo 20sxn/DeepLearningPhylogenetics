@@ -32,7 +32,7 @@ ALPHABET['Z']= 21
 rep = torch.tensor([8, 8, 2, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 5, 7, 8, 8, 8, 8, 8])
 rand = torch.tensor([0, 0, 0.2, 0, 0, 0, 0, 0, 0.2, 0.5, 0.3, 0.9, 0.8, 0.5, 0.9, 0, 0, 0, 0, 0])
 
-def training_loop(train_loader,val_loader,epochs=101,fname="../substituion_estimation/models/state.pth",fnameb=None,state=None,last_epoch_sched=float('inf'),use_mut=True,cont_size=CONT_SIZE):
+def training_loop(train_loader,val_loader,epochs=101,fname="models/state.pth",fnameb=None,state=None,last_epoch_sched=float('inf'),use_mut=True,cont_size=CONT_SIZE):
     """
     Trains a model
     """
@@ -62,7 +62,10 @@ def training_loop(train_loader,val_loader,epochs=101,fname="../substituion_estim
     for epoch in range(state.epoch, epochs):
         batch_losses = []
         state.model.train()
+        cpt = 0
         for X,y,PID,full_seq1,full_seq2,pos,length,pfreqs,l_pfreqs in train_loader:
+            if cpt == 2: break
+            else : cpt += 1
             X = X.to(device)
             y = y.to(device)
             pos = pos.to(device)
@@ -71,7 +74,7 @@ def training_loop(train_loader,val_loader,epochs=101,fname="../substituion_estim
             l_pfreqs = l_pfreqs.to(device)
             
             state.optim.zero_grad()
-            y_hat = state.model(X,full_seq1,full_seq2,pos,length,pfreqs,l_pfreqs)
+            y_hat = state.model(X,full_seq1,full_seq2,pfreqs,l_pfreqs)
             l = Loss(y_hat,y)/440 
             l.backward()
             state.optim.step()
@@ -90,8 +93,10 @@ def training_loop(train_loader,val_loader,epochs=101,fname="../substituion_estim
         with torch.no_grad():
             eval_losses = [] 
             state.model.eval()
+            cpt = 0
             for X,y,PID,full_seq1,full_seq2,pos,length,pfreqs,l_pfreqs in val_loader:
-
+                if cpt == 2: break
+                else : cpt += 1
                 X = X.to(device)
                 y = y.to(device)
                 pos = pos.to(device)
@@ -99,7 +104,7 @@ def training_loop(train_loader,val_loader,epochs=101,fname="../substituion_estim
                 pfreqs = pfreqs.to(device)
                 l_pfreqs = l_pfreqs.to(device)
 
-                y_hat = state.model(X,full_seq1,full_seq2,pos,length,pfreqs,l_pfreqs)
+                y_hat = state.model(X,full_seq1,full_seq2,pfreqs,l_pfreqs)
                 y_hat = F.softmax(y_hat,dim=1)
                 
                 y = F.one_hot(y, 20)
@@ -149,7 +154,7 @@ if __name__ == "__main__":
             torch.save(test_dataset,fp)
     else:
         with savepath.open("rb") as fp:
-            test_dataset = torch.load(fp)
+            train_dataset = torch.load(fp)
 
     fname = '../substitution_estimation/data/val_dataset.pth'
     savepath = Path(fname)
@@ -159,7 +164,7 @@ if __name__ == "__main__":
             torch.save(test_dataset,fp)
     else:
         with savepath.open("rb") as fp:
-            test_dataset = torch.load(fp)
+            val_dataset = torch.load(fp)
 
     train_dataset.cont_size = CONT_SIZE
     test_dataset.cont_size = CONT_SIZE
@@ -168,6 +173,9 @@ if __name__ == "__main__":
     train_dataset.div = 2000
     test_dataset.div = 2000
     val_dataset.div = 2000
+
+    for dataset in [train_dataset,test_dataset,val_dataset]:
+        dataset.data_dir = "../substitution_estimation/"+dataset.data_dir
 
     train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True,collate_fn=my_collate,num_workers=4)
     test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True,collate_fn=my_collate,num_workers=4)

@@ -13,7 +13,7 @@ import torchinfo
 from pathlib import Path
 import sys
 
-from models_CrossCorr_utils import AttNet, State, get_params
+from models_CrossCorr_utils import *
 
 torch.multiprocessing.set_sharing_strategy('file_system') #to avoid issues in the dataloading
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -54,7 +54,7 @@ def printalifile(s1,s2,sa,seqname1,seqname2,log_fname):
 
 
 
-fname = "models/state_1seq_CrossCorrCONV.pth"
+fname = "../substitution_estimation/models/state_1seq_CrossCorrCONV.pth"
 savepath = Path(fname)
 if savepath.is_file():
     with savepath.open("rb") as fp:
@@ -417,10 +417,8 @@ def main(in_dir_path,out_dir_path):
 
                     line = f.readline()[:-1]
                 
-
             mat = alignit_Elast(s1,s2,gOp=-10, gExt=-1)
             sa = backtrack(mat)
-
             printalifile(s1,s2,sa,seqname1,seqname2,log_fname)
 
 if __name__ == "__main__":

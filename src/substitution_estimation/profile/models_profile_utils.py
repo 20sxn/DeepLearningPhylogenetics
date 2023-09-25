@@ -76,25 +76,25 @@ class FeedForward2D(nn.Module):
     """    
     def __init__(self,in_features,out_features=None,wide_factor=4):
         super().__init__()
-        out_features = out_features or 2*in_features
-        hidden_dim = wide_factor * 2*in_features
+        out_features = out_features or 3*in_features
+        hidden_dim = wide_factor * 3*in_features
         
-        self.lin1 = nn.Linear(2*in_features,hidden_dim)
+        self.lin1 = nn.Linear(3*in_features,hidden_dim)
         self.act = nn.GELU()
         self.lin2 = nn.Linear(hidden_dim,out_features)
         
     def forward(self,x):
         b,n,l,d = x.shape
         
-        #dst = src.transpose(1, 2).reshape(b,l,n*d)
+        #dst = src.transpose(1, 2).reshape(b,l,n*d) 
         #src = dst.reshape(b,l,-1,d).transpose(1,2)
 
-        out = x.transpose(1, 2).reshape(b,l,n*d)
+        out = rearrange(x,"b n l d -> b l (n d)")
         out = self.lin1(out)
         out = self.act(out)
         out = self.lin2(out)
-        out = out.reshape(b,l,-1,d).transpose(1,2)
-        return out
+        out = rearrange(out,"b l (n d) -> b n l d",d=d) 
+        return out 
     
 
 class FeedForward(nn.Module):
@@ -213,7 +213,7 @@ class AttNet(nn.Module):
     """
     Transformer-like neural net
     """
-    def __init__(self,in_features,num_heads,head_dims,wide_factors,drops,embedding_dim=128,input_dim=21,out_size=20,num_seq=2,seq_len=2*CONT_SIZE+4,clf_dims=[256,64],cont_size=CONT_SIZE):
+    def __init__(self,in_features,num_heads,head_dims,wide_factors,drops,embedding_dim=128,input_dim=21,out_size=20,num_seq=2,seq_len=2*CONT_SIZE+2,clf_dims=[256,64],cont_size=CONT_SIZE):
         super().__init__()
         self.in_features = in_features
         self.embedding_dim = embedding_dim or in_features
@@ -225,7 +225,6 @@ class AttNet(nn.Module):
         r = min(len(num_heads),len(head_dims),len(wide_factors),len(drops))
         for i,(n_h, h_d,w,d) in enumerate(zip(num_heads,head_dims,wide_factors,drops)):
             blocks.append(Block(embedding_dim,num_heads=n_h,head_dims=h_d,wide_factor=w,drop=d))
-
             
         self.feature_extractor = nn.Sequential(*blocks)
         self.clf = Classifier_Head(embedding_dim,clf_dims,out_size=20,seq_len=seq_len)
@@ -234,62 +233,55 @@ class AttNet(nn.Module):
         with sp.open("rb") as fp:
             self.F = nn.Parameter(torch.log(torch.load(fp)))
         
-        pid_layers = [nn.Linear(1,2*in_features),nn.Sigmoid()]
+        pid_layers = [nn.Linear(1,3*in_features),nn.Sigmoid()]
         self.pid_l = nn.Sequential(*pid_layers)
         embed_layers =  [nn.Linear(in_features,embedding_dim),nn.GELU()]
         self.embedding = nn.Sequential(*embed_layers)
         self.el_average_weigths = nn.Parameter(torch.randn((1,seq_len,1)))
-        self.seq_average_weigths = nn.Parameter(torch.randn((1,2,1,1)))
+        self.seq_average_weigths = nn.Parameter(torch.randn((1,3,1,1)))
 
-    def to_input(self,x,PID,pos,length,pfreqs,l_pfreqs):
+    def to_input(self,x,PID,profiles):
         
         X_idx = torch.argmax(x[:,self.cont_size],dim=1)
         seq1 = x[:,:2*self.cont_size+1]
         y_freq = F.pad(F.softmax(self.F[X_idx],dim=1).unsqueeze(1), pad=(0, 1), mode='constant', value=0) 
         seq2 = torch.cat((x[:,2*self.cont_size+1:3*self.cont_size+1],y_freq,x[:,3*self.cont_size+1:]),dim=1)
+        #aa_pos = pos[:,:2*self.cont_size+1]/length.unsqueeze(1)
         aa_pos = ((torch.arange(2*self.cont_size+1)-self.cont_size)/self.cont_size)
         aa_pos = repeat(aa_pos,"l -> b l",b=x.shape[0]).to(self.F.device)
         aa_pos = aa_pos.unsqueeze(2)
-        pos_dim = 0 #(self.in_features-self.input_dim-1)//2
-        
-        for i in range(pos_dim): #positionnal_encoding
-            p = torch.cos(pos[:,:2*self.cont_size+1]/(32**(2*i/pos_dim))).unsqueeze(2)
-            ip = torch.sin(pos[:,:2*self.cont_size+1]/(32**(2*i/pos_dim))).unsqueeze(2)
-            aa_pos = torch.cat([aa_pos,p,ip],dim=2)
+        seq3 = F.normalize(profiles,dim=2) #### p = 1
+        seq3 = F.pad(seq3, pad=(0, 1), mode='constant', value=0)
         
         seq1 = torch.cat([seq1,aa_pos],dim=2)
         seq2 = torch.cat([seq2,aa_pos],dim=2)
+        seq3 = torch.cat([seq3,aa_pos],dim=2)
         
-        out = torch.stack([seq1,seq2],dim=1)
+        out = torch.stack([seq1,seq2,seq3],dim=1)
         
         pid = self.pid_l(PID.unsqueeze(1)).unsqueeze(1)
-        pid = rearrange(pid,"b 1 (n e) -> b n 1 e",n=2)
+        pid = rearrange(pid,"b 1 (n e) -> b n 1 e",n=3)
         
         pad = (0,self.in_features-self.input_dim+1)
         
-        pfreqs = F.normalize(pfreqs,p=1,dim=1)
-        pf = F.pad(pfreqs.unsqueeze(1),pad =pad, mode='constant', value=0)
-        pf = repeat(pf,"b 1 d -> b 2 1 d")
-        l_pfreqs = F.normalize(l_pfreqs,p=1,dim=2)
-        lpf = F.pad(l_pfreqs,pad=pad, mode='constant', value=0).unsqueeze(2)
-        out = torch.cat([out,pf,pid,lpf],dim=2)
+        out = torch.cat([out,pid],dim=2)
         
         return out
         
         
-    def forward(self,x,PID,pos,length,pfreqs,l_pfreqs):
-        X_input = self.to_input(x,PID,pos,length,pfreqs,l_pfreqs)
+    def forward(self,x,PID,profiles):
+        X_input = self.to_input(x,PID,profiles)
         X_input = self.embedding(X_input)
         features = self.feature_extractor(X_input)
         
-        #weighted avergage + act function to break linearity
         w_seq = F.softmax(self.seq_average_weigths,dim=1)
-        features = torch.atan((features * w_seq).sum(dim=1)) 
+        features = torch.atan((features * w_seq).sum(dim=1))
         
         w_el = F.softmax(self.el_average_weigths,dim=1) 
-        clf_input = torch.atan((features * w_el).sum(dim=1))
+        clf_input = torch.atan((features * w_el).sum(dim=1)) #weigthed average on sequence
         
         y_pred = self.clf(clf_input)
+        
         return y_pred
     
 

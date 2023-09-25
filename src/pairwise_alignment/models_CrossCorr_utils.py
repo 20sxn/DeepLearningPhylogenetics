@@ -243,6 +243,7 @@ class AttNet(nn.Module):
         seq1 : list[tensor[l1,emb_dim]]
         seq2 : list[tensor[l2,emb_dim]]
         l1 and l2 may vary between elements of the lists 
+        but we need to have l1 > l2 !!!
         """
         N = len(seq1)
         assert len(seq2) == N
@@ -286,7 +287,7 @@ class AttNet(nn.Module):
         out = out[torch.arange(N),:,idx]/ll2.unsqueeze(1)
         return out
 
-    def to_input(self,x,pos,length,pfreqs,l_pfreqs):
+    def to_input(self,x,pfreqs,l_pfreqs):
         
         X_idx = torch.argmax(x[:,self.cont_size],dim=1)
         seq1 = x[:,:2*self.cont_size+1]
@@ -312,12 +313,33 @@ class AttNet(nn.Module):
         return out
         
         
-    def forward(self,x,full_seq1,full_seq2,pos,length,pfreqs,l_pfreqs,mode="fast"):
+    def forward(self,x,full_seq1,full_seq2,pfreqs,l_pfreqs,mode="fast"):
         if mode == "slow":
             corr = self.cross_corr_slow(full_seq1,full_seq2)
         else:
             corr = self.cross_corr(full_seq1,full_seq2)
-        X_input = self.to_input(x,pos,length,pfreqs,l_pfreqs)
+        X_input = self.to_input(x,pfreqs,l_pfreqs)
+        X_input = self.embedding(X_input)
+        X_input = torch.cat((X_input,corr.unsqueeze(1)),dim=1)
+    
+        features = self.feature_extractor(X_input)
+        
+        #weighted avergage + act function to break linearity
+        
+        w_el = F.softmax(self.el_average_weigths,dim=1) 
+        clf_input = torch.tanh((features * w_el).sum(dim=1))
+        
+        y_pred = self.clf(clf_input)
+        return y_pred
+    
+    def forward_alignment(self,x,full_seq1,full_seq2,pfreqs,l_pfreqs,mode="fast"):
+        if mode == "slow":
+            corr = self.cross_corr_slow(full_seq1,full_seq2)
+        #add fft mode for CPU
+        else:
+            corr = self.cross_corr(full_seq1,full_seq2)
+        corr = corr.repeat(x.shape[0],1)
+        X_input = self.to_input(x,pfreqs,l_pfreqs)
         X_input = self.embedding(X_input)
         X_input = torch.cat((X_input,corr.unsqueeze(1)),dim=1)
     

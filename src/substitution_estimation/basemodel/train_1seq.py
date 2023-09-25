@@ -135,7 +135,7 @@ def training_loop(train_loader,val_loader,epochs=101,fname="../models/state.pth"
 
 if __name__ == "__main__":
 
-    fname = '../data/test_dataset_profile.pth'
+    fname = '../data/test_dataset.pth'
     savepath = Path(fname)
     if not savepath.is_file():
         test_dataset = MyDataset(r"../data/test_data",cont_size = CONT_SIZE,div=2000)
@@ -145,7 +145,7 @@ if __name__ == "__main__":
         with savepath.open("rb") as fp:
             test_dataset = torch.load(fp)
 
-    fname = '../data/train_dataset_profile.pth'
+    fname = '../data/train_dataset.pth'
     savepath = Path(fname)
     if not savepath.is_file():
         train_dataset = MyDataset(r"../data/train_data",cont_size = CONT_SIZE,div=2000)
@@ -153,9 +153,9 @@ if __name__ == "__main__":
             torch.save(test_dataset,fp)
     else:
         with savepath.open("rb") as fp:
-            test_dataset = torch.load(fp)
+            train_dataset = torch.load(fp)
 
-    fname = '../data/val_dataset_profile.pth'
+    fname = '../data/val_dataset.pth'
     savepath = Path(fname)
     if not savepath.is_file():
         val_dataset = MyDataset(r"../data/val_data",cont_size = CONT_SIZE,div=2000)
@@ -163,7 +163,7 @@ if __name__ == "__main__":
             torch.save(test_dataset,fp)
     else:
         with savepath.open("rb") as fp:
-            test_dataset = torch.load(fp)
+            val_dataset = torch.load(fp)
 
     train_dataset.cont_size = CONT_SIZE
     test_dataset.cont_size = CONT_SIZE
@@ -172,6 +172,9 @@ if __name__ == "__main__":
     train_dataset.div = 2000
     test_dataset.div = 2000
     val_dataset.div = 2000
+
+    for dataset in [train_dataset,test_dataset,val_dataset]:
+        dataset.data_dir = "../"+dataset.data_dir
 
     train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True,collate_fn=my_collate,num_workers=4)
     test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True,collate_fn=my_collate,num_workers=4)
@@ -185,5 +188,4 @@ if __name__ == "__main__":
     state = State(model,optim,scheduler)
 
     fname = "../models/state_1seq.pth"
-
     _,_,_ = training_loop(train_dataloader, val_dataloader,fname=fname,epochs=4080,state=state,use_mut=False)

@@ -217,10 +217,12 @@ class MyDataset(Dataset):
             
             align_l = len(seq_i)
             possible_k = [] #possible position to take
+
             for k,(a_i,a_j) in enumerate(zip(seq_i,seq_j)):   
                 if ALPHABET.get(a_i,21) < 20 and ALPHABET.get(a_j,21) < 20:
                     possible_k.append(k)
             
+
             # biasing for more diverse PID  
             bin_idx = int(PID_ij//(1/bin_n))
             rep_number = rep[bin_idx].clone()
@@ -271,6 +273,7 @@ class MyDataset(Dataset):
                 fam_freqs = self.aa_freqs[idx].clone()
                 fam_freqs[y_j] -= 1
                 pfreqs.append(fam_freqs)
+
                 
                 p_i_freqs = self.p_aa_freqs[idx][i].clone()
                 p_j_freqs = self.p_aa_freqs[idx][j].clone()
@@ -297,6 +300,7 @@ class MyDataset(Dataset):
         PIDs = torch.tensor(PIDs)
         local_PIDs = torch.tensor(local_PIDs)
         lengths = torch.tensor(lengths)
+
         pfreqs = torch.stack(pfreqs)
         local_pfreqs = torch.stack(local_pfreqs)
         

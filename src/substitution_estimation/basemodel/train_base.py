@@ -153,7 +153,7 @@ if __name__ == "__main__":
             torch.save(test_dataset,fp)
     else:
         with savepath.open("rb") as fp:
-            test_dataset = torch.load(fp)
+            train_dataset = torch.load(fp)
 
     fname = '../data/val_dataset.pth'
     savepath = Path(fname)
@@ -163,7 +163,7 @@ if __name__ == "__main__":
             torch.save(test_dataset,fp)
     else:
         with savepath.open("rb") as fp:
-            test_dataset = torch.load(fp)
+            val_dataset = torch.load(fp)
 
     train_dataset.cont_size = CONT_SIZE
     test_dataset.cont_size = CONT_SIZE
@@ -172,6 +172,9 @@ if __name__ == "__main__":
     train_dataset.div = 2000
     test_dataset.div = 2000
     val_dataset.div = 2000
+
+    for dataset in [train_dataset,test_dataset,val_dataset]:
+        dataset.data_dir = "../"+dataset.data_dir
 
     train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True,collate_fn=my_collate,num_workers=4)
     test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True,collate_fn=my_collate,num_workers=4)
@@ -185,5 +188,4 @@ if __name__ == "__main__":
     state = State(model,optim,scheduler)
 
     fname = "../models/state_2seq_SemiAxAtt.pth"
-
     _,_,_ = training_loop(train_dataloader, val_dataloader,fname=fname,epochs=4080,state=state,use_mut=False)
